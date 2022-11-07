@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 def read_docs_from_csv(filename):
     docs = []
-    with open(filename) as csvfile:
+    with open(filename, encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile)
         for text, label in tqdm(reader):
             words = nltk.word_tokenize(text)
