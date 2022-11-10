@@ -13,6 +13,8 @@ setup(
         "torch==1.12.1",
         "pandas==1.5.0",
         "scikit-learn==1.1.2",
+        "spacy==3.4.3",
+        "networkx==2.8.8"
     ],
     packages=find_packages(),
     classifiers=[
