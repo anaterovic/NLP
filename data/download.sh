@@ -1,3 +1,6 @@
-wget https://owncloud.tuwien.ac.at/index.php/s/C2EXAQBlMLHvpHv/download -O imdb_dataset_sample.csv
-wget https://owncloud.tuwien.ac.at/index.php/s/L0z1sXXgWFLloY4/download -O bayes_model.tsv
-wget https://owncloud.tuwien.ac.at/index.php/s/hEJEq7vvN2ErtUj/download -O bow_model.pt
+# Download FoodDisease dataset
+wget https://raw.githubusercontent.com/gjorgjinac/food-disease-dataset/main/food_disease_dataset.csv -O food_disease.csv
+
+# Download CrowdTruth medical relation dataset
+wget https://raw.githubusercontent.com/CrowdTruth/Medical-Relation-Extraction/master/ground_truth_cause.csv -O crowd_truth_cause.csv
+wget https://raw.githubusercontent.com/CrowdTruth/Medical-Relation-Extraction/master/ground_truth_treat.csv -O crowd_truth_treat.csv
