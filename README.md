@@ -150,7 +150,7 @@ optional arguments:
 
 __Training__:
 
-To train a model on the IMDB dataset and then save the weights to a file, you can run a command:
+To train a model on the FoodDisease dataset and then save object to a file, you can run a command:
 
 ```bash
 python scripts/train.py -t data/food_disease.csv -sdp -s -sp data/bayes_model.pkl -m 1
@@ -158,7 +158,7 @@ python scripts/train.py -t data/food_disease.csv -sdp -s -sp data/bayes_model.pk
 
 __Evaluation__:
 
-To evaluate the model on the dataset with a trained model, you can run a command (you can also provide a pretrained model, so if someone wants to evaluate your model, they can do it without training it):
+To evaluate the model on the dataset with a trained model, you can run a command:
 
 ```bash
 python scripts/evaluate.py -t data/food_disease.csv -sm data/bayes_model.pkl -sp -m 1
