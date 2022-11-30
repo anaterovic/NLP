@@ -1,47 +1,42 @@
 import argparse
 
 from tuwnlpie import logger
-from tuwnlpie.milestone1.model import SimpleNBClassifier
-from tuwnlpie.milestone1.utils import (
-    calculate_tp_fp_fn,
-    read_docs_from_csv,
-    split_train_dev_test,
-)
+from tuwnlpie.milestone1.model import NBClassifier
+from tuwnlpie.milestone1.utils import read_food_disease_csv, split_data, calculate_tp_fp_fn
 
 from tuwnlpie.milestone2.model import BoWClassifier
 from tuwnlpie.milestone2.utils import IMDBDataset, Trainer
 
+import numpy as np
+from sklearn.metrics import classification_report
+
+import warnings
+warnings.filterwarnings('ignore')
+
 
 def evaluate_milestone1(test_data, saved_model, split=False):
-    model = SimpleNBClassifier()
+    model = NBClassifier()
     model.load_model(saved_model)
-    docs = read_docs_from_csv(test_data)
+    docs = read_food_disease_csv(test_data)
     test_docs = None
 
     if split:
-        _, _, test_docs = split_train_dev_test(docs)
+        _, test_docs = split_data(docs)
     else:
         test_docs = docs
 
     y_true = []
     y_pred = []
-    for doc in test_docs:
-        pred = model.predict_label(doc[0])
-        y_true.append(doc[1])
+    for _, row in test_docs.iterrows():
+        pred = model.predict_label(row['sentence'], row['food_entity'], row['disease_entity'])
+        y_true.append(row[['is_cause', 'is_treat']])
         y_pred.append(pred)
-        logger.info(f"Predicted: {pred}, True: {doc[1]}")
+        logger.info(f"Predicted: {pred}, True: {row[['is_cause', 'is_treat']]}")
 
-    tp, fp, fn, precision, recall, fscore = calculate_tp_fp_fn(y_true, y_pred)
-
-    print("Statistics:")
-    print(f"TP: {tp}")
-    print(f"FP: {fp}")
-    print(f"FN: {fn}")
-    print(f"Precision: {precision}")
-    print(f"Recall: {recall}")
-    print(f"F1-Score: {fscore}")
-
-    return
+    print(classification_report(
+        np.array(y_true).squeeze().astype(int),
+        np.array(y_pred).squeeze().astype(int),
+        target_names=['is_cause', 'is_treat']))
 
 
 def evaluate_milestone2(test_data, saved_model, split=False):

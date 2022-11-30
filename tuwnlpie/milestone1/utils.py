@@ -1,31 +1,29 @@
-import csv
-
-import nltk
-import numpy as np
-from tqdm import tqdm
+from pathlib import Path
+import pandas as pd
+from sklearn.model_selection import train_test_split
 
 
-def read_docs_from_csv(filename):
-    docs = []
-    with open(filename, encoding='utf-8') as csvfile:
-        reader = csv.reader(csvfile)
-        for text, label in tqdm(reader):
-            words = nltk.word_tokenize(text)
-            docs.append((words, label))
-
-    return docs
-
-
-def split_train_dev_test(docs, train_ratio=0.8, dev_ratio=0.1):
-    np.random.seed(2022)
-    np.random.shuffle(docs)
-    train_size = int(len(docs) * train_ratio)
-    dev_size = int(len(docs) * dev_ratio)
-    return (
-        docs[:train_size],
-        docs[train_size : train_size + dev_size],
-        docs[train_size + dev_size :],
+def read_food_disease_csv(path=Path('..', 'data', 'food_disease.csv')):
+    usecols = ['food_entity', 'disease_entity', 'sentence', 'is_cause', 'is_treat']
+    df = pd.read_csv(
+        path, sep=',', quotechar='"', skipinitialspace=True,
+        encoding='utf-8', on_bad_lines='skip', usecols=usecols
     )
+    df['sentence'] = df['sentence'].map(lambda x: x.lower())
+    # Replace entities in sentence with placeholder tokens (may be useful for generalization when using n-grams)
+    df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['food_entity'], 'food_entity'), axis=1)
+    df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['disease_entity'], 'disease_entity'), axis=1)
+    # Drop malformed documents (both entities must be present in sentence)
+    df = df[df['sentence'].apply(lambda x: 'food_entity' in x and 'disease_entity' in x)]
+    # Convert labels to right dtype
+    df['is_cause'] = df['is_cause'].astype(float).astype(int)
+    df['is_treat'] = df['is_treat'].astype(float).astype(int)
+    return df
+
+
+def split_data(docs):
+    train, test = train_test_split(docs, test_size=0.20)
+    return train, test
 
 
 def calculate_tp_fp_fn(y_true, y_pred):
