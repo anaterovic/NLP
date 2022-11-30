@@ -114,12 +114,14 @@ We have two scripts implemented for you:
 - `train.py`: This script is used to train your models. It should expect a dataset file as an input and it should save the trained model in a file.
 
 ```bash
-train.py [-h] -t TRAIN_DATA [-s] [-sp SAVE_PATH] [-m {1,2}]
+usage: train.py [-h] -t TRAIN_DATA [-sdp] [-s] [-sp SAVE_PATH] [-m {1,2}]
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -t TRAIN_DATA, --train-data TRAIN_DATA
                         Path to training data
+  -sdp, --shortest-dep-path
+                        Use shortest dependency path tokens
   -s, --save            Save model
   -sp SAVE_PATH, --save-path SAVE_PATH
                         Path to save model
