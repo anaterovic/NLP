@@ -114,12 +114,14 @@ We have two scripts implemented for you:
 - `train.py`: This script is used to train your models. It should expect a dataset file as an input and it should save the trained model in a file.
 
 ```bash
-train.py [-h] -t TRAIN_DATA [-s] [-sp SAVE_PATH] [-m {1,2}]
+usage: train.py [-h] -t TRAIN_DATA [-sdp] [-s] [-sp SAVE_PATH] [-m {1,2}]
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -t TRAIN_DATA, --train-data TRAIN_DATA
                         Path to training data
+  -sdp, --shortest-dep-path
+                        Use shortest dependency path tokens
   -s, --save            Save model
   -sp SAVE_PATH, --save-path SAVE_PATH
                         Path to save model
@@ -148,18 +150,18 @@ optional arguments:
 
 __Training__:
 
-To train a model on the IMDB dataset and then save the weights to a file, you can run a command:
+To train a model on the FoodDisease dataset and then save object to a file, you can run a command:
 
 ```bash
-python scripts/train.py -t data/imdb_dataset_sample.csv -s -sp data/bayes_model.tsv -m 1
+python scripts/train.py -t data/food_disease.csv -sdp -s -sp data/bayes_model.pkl -m 1
 ```
 
 __Evaluation__:
 
-To evaluate the model on the dataset with a trained model, you can run a command (you can also provide a pretrained model, so if someone wants to evaluate your model, they can do it without training it):
+To evaluate the model on the dataset with a trained model, you can run a command:
 
 ```bash
-python scripts/evaluate.py -t data/imdb_dataset_sample.csv -sm data/bayes_model.tsv -sp -m 1
+python scripts/evaluate.py -t data/food_disease.csv -sm data/bayes_model.pkl -sp -m 1
 ```
 
 ## Run Milestone 2
