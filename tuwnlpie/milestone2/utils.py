@@ -20,9 +20,6 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from tuwnlpie.milestone2.model import BoWClassifier
-
-
 # This is just for measuring training time!
 def epoch_time(start_time, end_time):
     elapsed_time = end_time - start_time
@@ -39,34 +36,16 @@ class LemmaTokenizer(object):
         return [self.wnl.lemmatize(t) for t in word_tokenize(articles)]
 
 
-def read_crowd_truth_csv(
-        path_cause=Path('.', 'data', 'crowd_truth_cause.csv'),
-        path_treat=Path('.', 'data', 'crowd_truth_treat.csv'),
-        shall_sdp=False
-    ):
+def read_and_prepare_data(path, shall_sdp=False):
 
-    usedcols = ['sentence', 'term1', 'term2']
-    df_cause = pd.read_csv(
-        path_cause,
+    usedcols = ['sentence', 'term1', 'term2', 'is_cause', 'is_treat']
+    df = pd.read_csv(
+        path,
         sep=',', quotechar='"',
         skipinitialspace=True,
         encoding='utf-8',
         on_bad_lines='skip',
-        usecols=usedcols
-    )
-    df_cause["is_cause"] = 1
-    df_cause["is_treat"] = 0
-    df_treat = pd.read_csv(
-        path_treat,
-        sep=',', quotechar='"',
-        skipinitialspace=True,
-        encoding='utf-8',
-        on_bad_lines='skip',
-        usecols=usedcols
-    )
-    df_treat["is_treat"] = 1
-    df_treat["is_cause"] = 0
-    df = df_cause.append(df_treat, ignore_index=True)
+        usecols=usedcols)
 
     # Make case insensitive (no loss because emphasis on words does not play a role)
     df['sentence'] = df['sentence'].map(lambda x: x.lower())
