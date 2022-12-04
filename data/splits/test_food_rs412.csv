@@ -1,4 +1,4 @@
-Unnamed: 0,food_entity,disease_entity,sentence,disease_doid,is_cause,is_treat
+Unnamed: 0,term1,term2,sentence,disease_doid,is_cause,is_treat
 562,pharmaceutical drugs,hyperuricemia,"While pharmaceutical drugs have been shown to exhibit serious side effects, and bioactive compounds from plant-based functional foods have been demonstrated to be active in the treatment of hyperuricemia with only minimal side effects.",DOID:1920,0.0,0.0
 107,ketogenic diets,cancer,"Despite recent interest in the use of ketogenic diets (KDs) for cancer, evidence of beneficial effects is lacking.",,0.0,0.0
 333,milk,lactation insufficiency,"Lactation insufficiency is variously defined and includes the inability to produce milk, not producing enough milk to exclusively meet infant growth requirements, and pathological interruption of lactation (e.g., mastitis).",,0.0,0.0

@@ -1,5 +1,6 @@
 import csv
 import time
+import numpy as np
 from pathlib import Path
 
 import nltk
@@ -10,6 +11,10 @@ import torch
 # Set the optimizer and the loss function!
 # https://pytorch.org/docs/stable/optim.html
 import torch.optim as optim
+from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.loggers import TensorBoardLogger
 from nltk import word_tokenize
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import CountVectorizer
@@ -18,7 +23,12 @@ from sklearn.model_selection import train_test_split as split
 from torch import nn
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+from torch.nn.utils.rnn import pad_sequence
 from tqdm import tqdm
+from keras.preprocessing.text import one_hot
+import copy
+from keras_preprocessing.sequence import pad_sequences
+
 
 # This is just for measuring training time!
 def epoch_time(start_time, end_time):
@@ -35,6 +45,27 @@ class LemmaTokenizer(object):
     def __call__(self, articles):
         return [self.wnl.lemmatize(t) for t in word_tokenize(articles)]
 
+def shortest_dep_path(sentence):
+    import spacy
+    import networkx as nx
+    nlp = spacy.load("en_core_web_sm")
+    doc = nlp(sentence)
+    edges = []
+    for token in doc:
+        for child in token.children:
+            edges.append((
+                '{0}'.format(token.lemma_),
+                '{0}'.format(child.lemma_)))
+    graph = nx.Graph(edges)
+    entity1 = 'food_entity'
+    entity2 = 'disease_entity'
+    try:
+        return nx.shortest_path(graph, source=entity1, target=entity2)
+    except:
+        return []
+
+def remove_stop_words(tokens):
+    return [x for x in tokens if x not in nltk.corpus.stopwords.words('english') and len(x) > 1]
 
 def read_and_prepare_data(path, shall_sdp=False):
 
@@ -59,7 +90,8 @@ def read_and_prepare_data(path, shall_sdp=False):
     df['is_treat'] = df['is_treat'].astype(float).astype(int)
 
     # Tokenize the sentences
-    df['tokens'] = df['sentence'].apply(lambda x: nltk.word_tokenize(x))
+    tokenizer = nltk.RegexpTokenizer(r'\w+')
+    df['tokens'] = df['sentence'].apply(lambda x: tokenizer.tokenize(x))
     # Remove stop words and tokens with length smaller than 2 (i.e. punctuations)
     df['tokens'] = df['tokens'].apply(lambda x: [token for token in x if token not in nltk.corpus.stopwords.words('english') and len(token) > 1])
     # Perform stemming
@@ -71,14 +103,14 @@ def read_and_prepare_data(path, shall_sdp=False):
     df['tokens_lemma'] = df['tokens_stem'].apply(lambda x: [lemmatizer.lemmatize(token) for token in x])
     
     if shall_sdp:
-        # df['sdp_tokens_lemma'] =
-        pass
+        df['sdp_tokens_lemma'] = df['sentence'].apply(lambda x: remove_stop_words(shortest_dep_path(x)))
+    print("## Finished reading and preparing data ##")
     return df
 
 
-def split_data_set(df, rate=0.8):
-    low_split, heigh_split = split(df, test_size=rate)
-    return low_split, heigh_split
+def split_data_set(df, rate=0.2, random_state=412):
+    s1, s2 = split(df, test_size=rate, random_state=random_state)
+    return s1, s2
 
 def length_longest_sentence(df):
     word_count = lambda sentence: len(nltk.word_tokenize(sentence))
@@ -86,30 +118,57 @@ def length_longest_sentence(df):
     length_long_sentence = len(nltk.word_tokenize(longest_sentence))
     return length_long_sentence
 
+def encodeX(df):
+    unique_words = set()
+    longest_sentence = 0
+    for sentence in df["tokens_lemma"]:
+        current_sentence = 0
+        for word in sentence:
+            current_sentence += 1
+            if word not in unique_words:
+                unique_words.add(word)
+            if current_sentence > longest_sentence:
+                longest_sentence = current_sentence
+
+    X_tmp = []
+    for sentence in df["tokens_lemma"]:
+        sen_tmp = []
+        for token in sentence:
+            sen_tmp.append(one_hot(token, len(unique_words)))
+        X_tmp.append(sen_tmp)
+
+    for x in X_tmp:
+        print(np.array(x).shape)
+    X_tmp = pad_sequences(np.array(X_tmp), longest_sentence+5, padding='post')
+
+    return X_tmp
+
+
 class TorchDataset(Dataset):
-    def __init__(self, df, feature_cols, label_cols):
+    def __init__(self, x, y):
         super().__init__()
-        self.df = df
-        self.feature_cols = feature_cols
-        self.label_cols = label_cols
-            
+        self.x = x
+        self.y = y
+
+    def get_x(self):
+        return self.x
+
+    def get_y(self):
+        return self.y
+
     def __getitem__(self, idx):
-        x = self.df[self.feature_cols].iloc[idx]
-        y = self.df[self.label_cols].iloc[idx]
-        return ([torch.tensor(x).float()], torch.tensor(y).long())
-    
+        x = self.x[idx]
+        y = self.y[idx]
+        tensorx = torch.tensor(x).float()
+        tensory = torch.tensor(y).long()
+        return (tensorx, tensory)
+
     def __len__(self):
-        return len(self.df)
+        return len(self.x)
 
-    def get_dataloader(self, batch_size=128, num_workers=8, shuffle=False):
-        return DataLoader(self, batch_size=batch_size, drop_last=True, pin_memory=True, num_workers=num_workers, shuffle=shuffle)
-
-
-
-
-
-
-
+    def get_dataloader(self, batch_size=128, num_workers=0, shuffle=False):
+        return DataLoader(self, batch_size=batch_size, drop_last=True, pin_memory=True, num_workers=num_workers,
+                          shuffle=shuffle)
 
 
 
@@ -259,10 +318,8 @@ class TorchTrainer():
         logger = TensorBoardLogger(f"{self.dirpath}/tensorboard", name=self.name)
         callbacks = [
             ModelCheckpoint(dirpath=Path(self.dirpath, self.name), monitor="val_loss"),
-            EarlyStopping(monitor='loss')]
-        trainer = Trainer(deterministic=True, logger=logger, callbacks=callbacks, max_epochs=self.max_epochs)
+            EarlyStopping(monitor='loss')
+            ]
+        trainer = Trainer(deterministic=True, logger=logger,
+                          callbacks=callbacks, max_epochs=self.max_epochs)
         trainer.fit(self.model, self.dataloaders['train'], self.dataloaders['val'])
-        val_result = trainer.test(self.model, self.dataloaders['val'], verbose=True)
-        test_result = trainer.test(self.model, self.dataloaders['test'], verbose=True)
-        result = {"test_acc": test_result, "val_acc": val_result}
-        #return result

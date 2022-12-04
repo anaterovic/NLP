@@ -1,4 +1,4 @@
-Unnamed: 0,food_entity,disease_entity,sentence,disease_doid,is_cause,is_treat
+Unnamed: 0,term1,term2,sentence,disease_doid,is_cause,is_treat
 495,shells of embryonated eggs,chlamydia-qpcr,Chlamydia-qPCR determined that 97.6% of shells of embryonated eggs (287/294) from a breeding farm were positive for C. gallinacea.,DOID:11263,0.0,0.0
 47,leaves and fruits of rhus coriaria,diabetes,The leaves and fruits of Rhus coriaria are traditionally used in Turkey for the treatment of diabetes.,DOID:9351,0.0,1.0
 245,cereals,hypersensitivity,Hypersensitivity to cereals may occur via inhalation or ingestion.,DOID:1205,1.0,0.0
