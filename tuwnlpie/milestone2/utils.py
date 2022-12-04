@@ -20,9 +20,6 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from tuwnlpie.milestone2.model import BoWClassifier
-
-
 # This is just for measuring training time!
 def epoch_time(start_time, end_time):
     elapsed_time = end_time - start_time
@@ -39,34 +36,16 @@ class LemmaTokenizer(object):
         return [self.wnl.lemmatize(t) for t in word_tokenize(articles)]
 
 
-def read_crowd_truth_csv(
-        path_cause=Path('.', 'data', 'crowd_truth_cause.csv'),
-        path_treat=Path('.', 'data', 'crowd_truth_treat.csv'),
-        shall_sdp=False
-    ):
+def read_and_prepare_data(path, shall_sdp=False):
 
-    usedcols = ['sentence', 'term1', 'term2']
-    df_cause = pd.read_csv(
-        path_cause,
+    usedcols = ['sentence', 'term1', 'term2', 'is_cause', 'is_treat']
+    df = pd.read_csv(
+        path,
         sep=',', quotechar='"',
         skipinitialspace=True,
         encoding='utf-8',
         on_bad_lines='skip',
-        usecols=usedcols
-    )
-    df_cause["is_cause"] = 1
-    df_cause["is_treat"] = 0
-    df_treat = pd.read_csv(
-        path_treat,
-        sep=',', quotechar='"',
-        skipinitialspace=True,
-        encoding='utf-8',
-        on_bad_lines='skip',
-        usecols=usedcols
-    )
-    df_treat["is_treat"] = 1
-    df_treat["is_cause"] = 0
-    df = df_cause.append(df_treat, ignore_index=True)
+        usecols=usedcols)
 
     # Make case insensitive (no loss because emphasis on words does not play a role)
     df['sentence'] = df['sentence'].map(lambda x: x.lower())
@@ -101,6 +80,11 @@ def split_data_set(df, rate=0.8):
     low_split, heigh_split = split(df, test_size=rate)
     return low_split, heigh_split
 
+def length_longest_sentence(df):
+    word_count = lambda sentence: len(nltk.word_tokenize(sentence))
+    longest_sentence = max(df, key=word_count)
+    length_long_sentence = len(nltk.word_tokenize(longest_sentence))
+    return length_long_sentence
 
 class TorchDataset(Dataset):
     def __init__(self, df, feature_cols, label_cols):
@@ -263,173 +247,22 @@ class IMDBDataset:
 
         return train_iterator, valid_iterator, test_iterator
 
-
-class Trainer:
-    def __init__(
-        self,
-        dataset: IMDBDataset,
-        model: BoWClassifier,
-        model_path: str = None,
-        test: bool = False,
-        lr: float = 0.001,
-    ):
-        self.dataset = dataset
+class TorchTrainer():
+    def __init__(self, model, name, dirpath, dataloaders, max_epochs=50) -> None:
         self.model = model
+        self.name = name
+        self.dirpath = dirpath
+        self.max_epochs = max_epochs
+        self.dataloaders = dataloaders
 
-        # The optimizer will update the weights of our model based on the loss function
-        # This is essential for correct training
-        # The _lr_ parameter is the learning rate
-        self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        self.criterion = nn.NLLLoss()
-
-        # Copy the model and the loss function to the correct device
-        self.model = self.model.to(dataset.device)
-        self.criterion = self.criterion.to(dataset.device)
-
-    def calculate_performance(self, preds, y):
-        """
-        Returns precision, recall, fscore per batch
-        """
-        # Get the predicted label from the probabilities
-        rounded_preds = preds.argmax(1)
-
-        # Calculate the correct predictions batch-wise and calculate precision, recall, and fscore
-        # WARNING: Tensors here could be on the GPU, so make sure to copy everything to CPU
-        precision, recall, fscore, support = precision_recall_fscore_support(
-            rounded_preds.cpu(), y.cpu()
-        )
-
-        return precision[1], recall[1], fscore[1]
-
-    def train(self, iterator):
-        # We will calculate loss and accuracy epoch-wise based on average batch accuracy
-        epoch_loss = 0
-        epoch_prec = 0
-        epoch_recall = 0
-        epoch_fscore = 0
-
-        # You always need to set your model to training mode
-        # If you don't set your model to training mode the error won't propagate back to the weights
-        self.model.train()
-
-        # We calculate the error on batches so the iterator will return matrices with shape [BATCH_SIZE, VOCAB_SIZE]
-        for batch in iterator:
-            text_vecs = batch[0]
-            labels = batch[1]
-            sen_lens = []
-            texts = []
-
-            # This is for later!
-            if len(batch) > 2:
-                sen_lens = batch[2]
-                texts = batch[3]
-
-            # We reset the gradients from the last step, so the loss will be calculated correctly (and not added together)
-            self.optimizer.zero_grad()
-
-            # This runs the forward function on your model (you don't need to call it directly)
-            predictions = self.model(text_vecs, sen_lens)
-
-            # Calculate the loss and the accuracy on the predictions (the predictions are log probabilities, remember!)
-            loss = self.criterion(predictions, labels)
-
-            prec, recall, fscore = self.calculate_performance(predictions, labels)
-
-            # Propagate the error back on the model (this means changing the initial weights in your model)
-            # Calculate gradients on parameters that requries grad
-            loss.backward()
-            # Update the parameters
-            self.optimizer.step()
-
-            # We add batch-wise loss to the epoch-wise loss
-            epoch_loss += loss.item()
-            # We also do the same with the scores
-            epoch_prec += prec.item()
-            epoch_recall += recall.item()
-            epoch_fscore += fscore.item()
-        return (
-            epoch_loss / len(iterator),
-            epoch_prec / len(iterator),
-            epoch_recall / len(iterator),
-            epoch_fscore / len(iterator),
-        )
-
-    # The evaluation is done on the validation dataset
-    def evaluate(self, iterator):
-
-        epoch_loss = 0
-        epoch_prec = 0
-        epoch_recall = 0
-        epoch_fscore = 0
-        # On the validation dataset we don't want training so we need to set the model on evaluation mode
-        self.model.eval()
-
-        # Also tell Pytorch to not propagate any error backwards in the model or calculate gradients
-        # This is needed when you only want to make predictions and use your model in inference mode!
-        with torch.no_grad():
-
-            # The remaining part is the same with the difference of not using the optimizer to backpropagation
-            for batch in iterator:
-                text_vecs = batch[0]
-                labels = batch[1]
-                sen_lens = []
-                texts = []
-
-                if len(batch) > 2:
-                    sen_lens = batch[2]
-                    texts = batch[3]
-
-                predictions = self.model(text_vecs, sen_lens)
-                loss = self.criterion(predictions, labels)
-
-                prec, recall, fscore = self.calculate_performance(predictions, labels)
-
-                epoch_loss += loss.item()
-                epoch_prec += prec.item()
-                epoch_recall += recall.item()
-                epoch_fscore += fscore.item()
-
-        # Return averaged loss on the whole epoch!
-        return (
-            epoch_loss / len(iterator),
-            epoch_prec / len(iterator),
-            epoch_recall / len(iterator),
-            epoch_fscore / len(iterator),
-        )
-
-    def training_loop(self, train_iterator, valid_iterator, epoch_number=15):
-        # Set an EPOCH number!
-        N_EPOCHS = epoch_number
-
-        best_valid_loss = float("inf")
-
-        # We loop forward on the epoch number
-        for epoch in range(N_EPOCHS):
-
-            start_time = time.time()
-
-            # Train the model on the training set using the dataloader
-            train_loss, train_prec, train_rec, train_fscore = self.train(train_iterator)
-            # And validate your model on the validation set
-            valid_loss, valid_prec, valid_rec, valid_fscore = self.evaluate(
-                valid_iterator
-            )
-
-            end_time = time.time()
-
-            epoch_mins, epoch_secs = epoch_time(start_time, end_time)
-
-            # If we find a better model, we save the weights so later we may want to reload it
-            if valid_loss < best_valid_loss:
-                best_valid_loss = valid_loss
-
-            print(f"Epoch: {epoch+1:02} | Epoch Time: {epoch_mins}m {epoch_secs}s")
-            print(
-                f"\tTrain Loss: {train_loss:.3f} | Train Prec: {train_prec*100:.2f}% | Train Rec: {train_rec*100:.2f}% | Train Fscore: {train_fscore*100:.2f}%"
-            )
-            print(
-                f"\t Val. Loss: {valid_loss:.3f} |  Val Prec: {valid_prec*100:.2f}% | Val Rec: {valid_rec*100:.2f}% | Val Fscore: {valid_fscore*100:.2f}%"
-            )
-
-        return best_valid_loss
-
+    def train(self):
+        logger = TensorBoardLogger(f"{self.dirpath}/tensorboard", name=self.name)
+        callbacks = [
+            ModelCheckpoint(dirpath=Path(self.dirpath, self.name), monitor="val_loss"),
+            EarlyStopping(monitor='loss')]
+        trainer = Trainer(deterministic=True, logger=logger, callbacks=callbacks, max_epochs=self.max_epochs)
+        trainer.fit(self.model, self.dataloaders['train'], self.dataloaders['val'])
+        val_result = trainer.test(self.model, self.dataloaders['val'], verbose=True)
+        test_result = trainer.test(self.model, self.dataloaders['test'], verbose=True)
+        result = {"test_acc": test_result, "val_acc": val_result}
+        #return result
