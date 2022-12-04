@@ -1,9 +1,11 @@
 import csv
 import time
+from pathlib import Path
 
 import nltk
 import pandas as pd
 import torch
+
 
 # Set the optimizer and the loss function!
 # https://pytorch.org/docs/stable/optim.html
@@ -14,6 +16,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.model_selection import train_test_split as split
 from torch import nn
+from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -34,6 +37,96 @@ class LemmaTokenizer(object):
 
     def __call__(self, articles):
         return [self.wnl.lemmatize(t) for t in word_tokenize(articles)]
+
+
+def read_crowd_truth_csv(
+        path_cause=Path('.', 'data', 'crowd_truth_cause.csv'),
+        path_treat=Path('.', 'data', 'crowd_truth_treat.csv'),
+        shall_sdp=False
+    ):
+
+    usedcols = ['sentence', 'term1', 'term2']
+    df_cause = pd.read_csv(
+        path_cause,
+        sep=',', quotechar='"',
+        skipinitialspace=True,
+        encoding='utf-8',
+        on_bad_lines='skip',
+        usecols=usedcols
+    )
+    df_cause["is_cause"] = 1
+    df_cause["is_treat"] = 0
+    df_treat = pd.read_csv(
+        path_treat,
+        sep=',', quotechar='"',
+        skipinitialspace=True,
+        encoding='utf-8',
+        on_bad_lines='skip',
+        usecols=usedcols
+    )
+    df_treat["is_treat"] = 1
+    df_treat["is_cause"] = 0
+    df = df_cause.append(df_treat, ignore_index=True)
+
+    # Make case insensitive (no loss because emphasis on words does not play a role)
+    df['sentence'] = df['sentence'].map(lambda x: x.lower())
+    # Replace entities in sentence with placeholder tokens (may be useful for generalization when using n-grams)
+    df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['term1'].lower(), 'TERM_ONE'), axis=1)
+    df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['term2'].lower(), 'TERM_TWO'), axis=1)
+    df = df[df['sentence'].apply(lambda x: 'TERM_ONE' in x and 'TERM_TWO' in x)]
+
+    # Convert labels to right dtype
+    df['is_cause'] = df['is_cause'].astype(float).astype(int)
+    df['is_treat'] = df['is_treat'].astype(float).astype(int)
+
+    # Tokenize the sentences
+    df['tokens'] = df['sentence'].apply(lambda x: nltk.word_tokenize(x))
+    # Remove stop words and tokens with length smaller than 2 (i.e. punctuations)
+    df['tokens'] = df['tokens'].apply(lambda x: [token for token in x if token not in nltk.corpus.stopwords.words('english') and len(token) > 1])
+    # Perform stemming
+    porter = nltk.PorterStemmer()
+    df['tokens_stem'] = df['tokens'].apply(lambda x: [porter.stem(token) for token in x])
+
+    # Perform lemmatization
+    lemmatizer = nltk.stem.WordNetLemmatizer()
+    df['tokens_lemma'] = df['tokens_stem'].apply(lambda x: [lemmatizer.lemmatize(token) for token in x])
+    
+    if shall_sdp:
+        # df['sdp_tokens_lemma'] =
+        pass
+    return df
+
+
+def split_data_set(df, rate=0.8):
+    low_split, heigh_split = split(df, test_size=rate)
+    return low_split, heigh_split
+
+
+class TorchDataset(Dataset):
+    def __init__(self, df, feature_cols, label_cols):
+        super().__init__()
+        self.df = df
+        self.feature_cols = feature_cols
+        self.label_cols = label_cols
+            
+    def __getitem__(self, idx):
+        x = self.df[self.feature_cols].iloc[idx]
+        y = self.df[self.label_cols].iloc[idx]
+        return ([torch.tensor(x).float()], torch.tensor(y).long())
+    
+    def __len__(self):
+        return len(self.df)
+
+    def get_dataloader(self, batch_size=128, num_workers=8, shuffle=False):
+        return DataLoader(self, batch_size=batch_size, drop_last=True, pin_memory=True, num_workers=num_workers, shuffle=shuffle)
+
+
+
+
+
+
+
+
 
 
 class IMDBDataset:
@@ -339,3 +432,4 @@ class Trainer:
             )
 
         return best_valid_loss
+
