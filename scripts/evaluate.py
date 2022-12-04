@@ -4,8 +4,11 @@ from tuwnlpie import logger
 from tuwnlpie.milestone1.model import NBClassifier
 from tuwnlpie.milestone1.utils import read_food_disease_csv, split_data, calculate_tp_fp_fn
 
-from tuwnlpie.milestone2.model import BoWClassifier
-from tuwnlpie.milestone2.utils import IMDBDataset, Trainer
+from tuwnlpie.milestone2.model import Trainer, TorchModel
+from tuwnlpie.milestone2.utils import read_crowd_truth_csv
+
+from pytorch_lightning.core.lightning import LightningModule
+
 
 import numpy as np
 from sklearn.metrics import classification_report
@@ -40,24 +43,18 @@ def evaluate_milestone1(test_data, saved_model, split=False):
 
 
 def evaluate_milestone2(test_data, saved_model, split=False):
-    logger.info("Loading data...")
-    dataset = IMDBDataset(test_data)
-    model = BoWClassifier(dataset.OUT_DIM, dataset.VOCAB_SIZE)
-    model.load_model(saved_model)
-    trainer = Trainer(dataset=dataset, model=model)
+    model = TorchModel.load_from_checkpoint("tuwnlpie/milestone2/lightning_logs/version_0/checkpoints/epoch=1-step=12.ckpt")
+    trainer = Trainer()
+    docs = read_crowd_truth_csv(test_data)
+    test_docs = None
 
-    logger.info("Evaluating...")
-    test_loss, test_prec, test_rec, test_fscore = trainer.evaluate(
-        dataset.test_iterator
-    )
+    if split:
+        _, test_docs = split_data(docs)
+    else:
+        test_docs = docs
 
-    print("Statistics:")
-    print(f"Loss: {test_loss}")
-    print(f"Precision: {test_prec}")
-    print(f"Recall: {test_rec}")
-    print(f"F1-Score: {test_fscore}")
+    trainer.test(model, test_docs)
 
-    return
 
 
 def get_args():
