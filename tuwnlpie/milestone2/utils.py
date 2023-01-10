@@ -121,7 +121,7 @@ def length_longest_sentence(df):
 def encodeX(df):
     unique_words = set()
     longest_sentence = 0
-    for sentence in df["tokens_lemma"]:
+    for sentence in df['tokens']:
         current_sentence = 0
         for word in sentence:
             current_sentence += 1
@@ -131,15 +131,13 @@ def encodeX(df):
                 longest_sentence = current_sentence
 
     X_tmp = []
-    for sentence in df["tokens_lemma"]:
+    for sentence in df['tokens_lemma']:
         sen_tmp = []
         for token in sentence:
             sen_tmp.append(one_hot(token, len(unique_words)))
         X_tmp.append(sen_tmp)
 
-    for x in X_tmp:
-        print(np.array(x).shape)
-    X_tmp = pad_sequences(np.array(X_tmp), longest_sentence+5, padding='post')
+    X_tmp = pad_sequences(X_tmp, longest_sentence, padding='post')
 
     return X_tmp
 

@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 
+
 from tuwnlpie import logger
 from tuwnlpie.milestone1.model import NBClassifier
 from tuwnlpie.milestone1.utils import read_food_disease_csv, split_data
@@ -27,36 +28,76 @@ def train_milestone2(train_data, save=False, save_path=None):
     feature_col = 'tokens_lemma' #['term1', 'term2', 'sentence', 'tokens', 'tokens_stem', 'tokens_lemma']
     label_cols = ['is_cause', 'is_treat']
 
-    data_frame = read_and_prepare_data(train_data)
-    data_frame[feature_col] = encodeX(data_frame)
-    train_set, val_set = split_data_set(data_frame)
-    train_set = train_set.reset_index(drop=True)
-    val_set = val_set.reset_index(drop=True)
+    # readIn
+    print("## Reading in Data ##")
+    data_frame = read_and_prepare_data(train_data, shall_sdp=False)
+
+    X = data_frame['tokens_lemma'].to_numpy()
+    y = data_frame[['is_cause', 'is_treat']].to_numpy()
+
+    print("## Encoding ##")
+    X = encodeX(data_frame)
+
+    print("## Split ##")
+    # split
+    X_train, X_test, y_train, y_test = split_data_set(X, y,  test_size=0.8, random_state=1)
+    X_test, X_val, y_test, y_val= split_data_set(X_test, y_test, test_size=0.5, random_state=1) 
+    
+    print("## Creating Data-Loaders ##")
+    # Data Loaders
+    X_train = TorchDataset(X_train,y_train)
+    X_test = TorchDataset(X_test, y_test)
+    X_val = TorchDataset(X_val, y_val)
+    dataloaders = { 'train': X_train.get_dataloader(batch_size=256, shuffle=True), 'test': X_test.get_dataloader(batch_size=128, shuffle=False), 'val': X_val.get_dataloader(batch_size=128, shuffle=False) }
+    
+    print("## Creating Model ##")
+    # model
+    model = TorchModel()
+    # trainer
+    trainer = TorchTrainer(
+        model, 
+        'test', 
+        "../tuwnlpie/milestone2/lightning_logs/version_0/checkpoints/" ,
+        dataloaders,
+        max_epochs=10
+        )
+
+    print("## Starting Training ##")
+    the_trainer = trainer.run()
 
 
-    X_train = train_set[feature_col].to_numpy()
-    X_val = val_set[feature_cols].to_numpy().flatten()
-    y_train = val_set[label_cols].to_numpy()
-    y_val = val_set[label_cols].to_numpy()
 
-    for i in range(10):
-        print(X_train[i])
-        print(y_train[i])
-    train_loader = TorchDataset(X_train, y_train)
-    val_loader = TorchDataset(X_val, y_val)
-    dataloaders = {'train': train_loader.get_dataloader(batch_size=64, shuffle=True),
-                   'val': val_loader.get_dataloader(batch_size=64, shuffle=False)}
+
+    # train_set, val_set = split_data_set(data_frame)
+    # train_set = train_set.reset_index(drop=True)
+    # val_set = val_set.reset_index(drop=True)
+
+
+    # X_train = train_set[feature_col].to_numpy()
+    # X_val = val_set[feature_cols].to_numpy().flatten()
+    # y_train = val_set[label_cols].to_numpy()
+    # y_val = val_set[label_cols].to_numpy()
+
+    # for i in range(10):
+    #     print(X_train[i])
+    #     print(y_train[i])
+    # train_loader = TorchDataset(X_train, y_train)
+    # val_loader = TorchDataset(X_val, y_val)
+    # dataloaders = {'train': train_loader.get_dataloader(batch_size=64, shuffle=True),
+    #                'val': val_loader.get_dataloader(batch_size=64, shuffle=False)}
+
+
 
     # Determine length of longest sentence
 
-    model = TorchModel()
-    trainer = TorchTrainer(model=model,
-                      name='TorchModel',
-                      dirpath='./',
-                      dataloaders=dataloaders,
-                      max_epochs=100)
+    # model = TorchModel()
+    # trainer = TorchTrainer(model=model,
+    #                   name='TorchModel',
+    #                   dirpath='./',
+    #                   dataloaders=dataloaders,
+    #                   max_epochs=100)
 
-    trainer.train()
+    # trainer.train()
 
     # logger.info("Loading data...")
     # dataset = IMDBDataset(train_data)
