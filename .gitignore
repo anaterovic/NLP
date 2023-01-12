@@ -134,3 +134,4 @@ dmypy.json
 
 # Big data
 data/milestone3/*embeddings*
+data/milestone3/*features*
