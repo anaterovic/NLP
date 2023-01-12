@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 
+import torch
+from sklearn.model_selection import train_test_split
 
 from tuwnlpie import logger
 from tuwnlpie.milestone1.model import NBClassifier
@@ -23,7 +25,7 @@ def train_milestone1(train_data=Path('..', 'data', 'food_disease.csv'), use_sdp=
     return
 
 
-def train_milestone2(train_data, save=False, save_path=None):
+def train_milestone2(train_data, use_sdp=False, save=False, save_path=None):
 
     feature_col = 'tokens_lemma' #['term1', 'term2', 'sentence', 'tokens', 'tokens_stem', 'tokens_lemma']
     label_cols = ['is_cause', 'is_treat']
@@ -31,24 +33,42 @@ def train_milestone2(train_data, save=False, save_path=None):
     # readIn
     print("## Reading in Data ##")
     data_frame = read_and_prepare_data(train_data, shall_sdp=False)
+    data_frame = data_frame[['tokens_lemma', 'tokens', 'is_cause', 'is_treat']]
 
-    X = data_frame['tokens_lemma'].to_numpy()
-    y = data_frame[['is_cause', 'is_treat']].to_numpy()
+    print(data_frame.columns.values)
+    X = data_frame[['tokens_lemma', 'tokens']]
+    y = data_frame[['is_cause', 'is_treat']]
 
     print("## Encoding ##")
-    X = encodeX(data_frame)
+    X = encodeX(X)
+    y = y.to_numpy()
+
+    # X = X['tokens_lemma'] # overcome with encode
 
     print("## Split ##")
     # split
-    X_train, X_test, y_train, y_test = split_data_set(X, y,  test_size=0.8, random_state=1)
-    X_test, X_val, y_test, y_val= split_data_set(X_test, y_test, test_size=0.5, random_state=1) 
-    
+    X_train, X_test, y_train, y_test = train_test_split(X, y,  test_size=0.8, random_state=1)
+    X_test, X_val, y_test, y_val= train_test_split(X_test, y_test, test_size=0.5, random_state=1) 
+
+
     print("## Creating Data-Loaders ##")
     # Data Loaders
-    X_train = TorchDataset(X_train,y_train)
+    X_train = TorchDataset(X_train, y_train)
     X_test = TorchDataset(X_test, y_test)
     X_val = TorchDataset(X_val, y_val)
-    dataloaders = { 'train': X_train.get_dataloader(batch_size=256, shuffle=True), 'test': X_test.get_dataloader(batch_size=128, shuffle=False), 'val': X_val.get_dataloader(batch_size=128, shuffle=False) }
+
+    dataloaders = { 
+        'train': X_train.get_dataloader(batch_size=256, shuffle=True), 
+        'test': X_test.get_dataloader(batch_size=128, shuffle=False), 
+        'val': X_val.get_dataloader(batch_size=128, shuffle=False)
+    }
+    # train_loader = TorchDataset(X_train,y_train)
+    # val_loader = TorchDataset(X_val,y_val)
+
+    # dataloaders = { 
+    #     'train': train_loader.get_dataloader(batch_size=256, shuffle=True), 
+    #     'val': val_loader.get_dataloader(batch_size=128, shuffle=False)
+    # }
     
     print("## Creating Model ##")
     # model
@@ -146,4 +166,4 @@ if "__main__" == __name__:
     if milestone == 1:
         train_milestone1(train_data, use_sdp=shortest_dep_path, save=model_save, save_path=model_save_path)
     elif milestone == 2:
-        train_milestone2(train_data, save=model_save, save_path=model_save_path)
+        train_milestone2(train_data, use_sdp=shortest_dep_path, save=model_save, save_path=model_save_path)

@@ -4,6 +4,11 @@ import numpy as np
 from pathlib import Path
 
 import nltk
+from nltk import RegexpTokenizer
+
+import spacy
+import networkx as nx
+
 import pandas as pd
 import torch
 
@@ -81,36 +86,88 @@ def read_and_prepare_data(path, shall_sdp=False):
     # Make case insensitive (no loss because emphasis on words does not play a role)
     df['sentence'] = df['sentence'].map(lambda x: x.lower())
     # Replace entities in sentence with placeholder tokens (may be useful for generalization when using n-grams)
-    df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['term1'].lower(), 'TERM_ONE'), axis=1)
-    df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['term2'].lower(), 'TERM_TWO'), axis=1)
-    df = df[df['sentence'].apply(lambda x: 'TERM_ONE' in x and 'TERM_TWO' in x)]
+    df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['term1'].lower(), 'TERMONE').replace('TERMONEs', 'TERMONE'), axis=1)
+    df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['term2'].lower(), 'TERMTWO').replace('TERMTWOs', 'TERMTWO'), axis=1)
+
+    df = df[df['sentence'].apply(lambda x: 'TERMONE' in x and 'TERMTWO' in x)]
 
     # Convert labels to right dtype
     df['is_cause'] = df['is_cause'].astype(float).astype(int)
     df['is_treat'] = df['is_treat'].astype(float).astype(int)
 
     # Tokenize the sentences
-    tokenizer = nltk.RegexpTokenizer(r'\w+')
+    tokenizer = RegexpTokenizer(r'\w+')
     df['tokens'] = df['sentence'].apply(lambda x: tokenizer.tokenize(x))
     # Remove stop words and tokens with length smaller than 2 (i.e. punctuations)
     df['tokens'] = df['tokens'].apply(lambda x: [token for token in x if token not in nltk.corpus.stopwords.words('english') and len(token) > 1])
     # Perform stemming
     porter = nltk.PorterStemmer()
     df['tokens_stem'] = df['tokens'].apply(lambda x: [porter.stem(token) for token in x])
-
+    
     # Perform lemmatization
     lemmatizer = nltk.stem.WordNetLemmatizer()
     df['tokens_lemma'] = df['tokens_stem'].apply(lambda x: [lemmatizer.lemmatize(token) for token in x])
+
     
-    if shall_sdp:
-        df['sdp_tokens_lemma'] = df['sentence'].apply(lambda x: remove_stop_words(shortest_dep_path(x)))
+    nlp = spacy.load("en_core_web_sm")
+    doc = nlp(df['sentence'][0])
+    def shortest_dep_path(sentence):
+        doc = nlp(sentence)
+        edges = []
+        for token in doc:
+            for child in token.children:
+                edges.append((
+                    '{0}'.format(token.lemma_),
+                    '{0}'.format(child.lemma_)))
+        graph = nx.Graph(edges)
+        entity1 = 'TERMONE'
+        entity2 = 'TERMTWO'
+        try:
+            return nx.shortest_path(graph, source=entity1, target=entity2)
+        except:
+            return []
+
+    def remove_stop_words(tokens):
+        return [x for x in tokens if x not in nltk.corpus.stopwords.words('english') and len(x) > 1]
+
+
+    df['sdp_tokens_lemma'] = df['sentence'].apply(lambda x: remove_stop_words(shortest_dep_path(x)))
+
+    
+    # # Make case insensitive (no loss because emphasis on words does not play a role)
+    # df['sentence'] = df['sentence'].map(lambda x: x.lower())
+    # # Replace entities in sentence with placeholder tokens (may be useful for generalization when using n-grams)
+    # df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['term1'].lower(), 'TERMONE'), axis=1)
+    # df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['term2'].lower(), 'TERMTWO'), axis=1)
+    # df = df[df['sentence'].apply(lambda x: 'TERMONE' in x and 'TERMTWO' in x)]
+
+    # # Convert labels to right dtype
+    # df['is_cause'] = df['is_cause'].astype(float).astype(int)
+    # df['is_treat'] = df['is_treat'].astype(float).astype(int)
+
+    # # Tokenize the sentences
+    # tokenizer = nltk.RegexpTokenizer(r'\w+')
+    # df['tokens'] = df['sentence'].apply(lambda x: tokenizer.tokenize(x))
+    # # Remove stop words and tokens with length smaller than 2 (i.e. punctuations)
+    # df['tokens'] = df['tokens'].apply(lambda x: [token for token in x if token not in nltk.corpus.stopwords.words('english') and len(token) > 1])
+    # # Perform stemming
+    # porter = nltk.PorterStemmer()
+    # df['tokens_stem'] = df['tokens'].apply(lambda x: [porter.stem(token) for token in x])
+
+    # # Perform lemmatization
+    # lemmatizer = nltk.stem.WordNetLemmatizer()
+    # df['tokens_lemma'] = df['tokens_stem'].apply(lambda x: [lemmatizer.lemmatize(token) for token in x])
+    
+    # if shall_sdp:
+    #     df['sdp_tokens_lemma'] = df['sentence'].apply(lambda x: remove_stop_words(shortest_dep_path(x)))
+    # print(df.columns.values)
     print("## Finished reading and preparing data ##")
     return df
 
 
-def split_data_set(df, rate=0.2, random_state=412):
-    s1, s2 = split(df, test_size=rate, random_state=random_state)
-    return s1, s2
+def split_data_set(X, y, size=0.8, random_state=412):
+    s1, s2, s3, s4 = split(X, y, test_size=size, random_state=random_state)
+    return s1, s2, s3, s4
 
 def length_longest_sentence(df):
     word_count = lambda sentence: len(nltk.word_tokenize(sentence))
@@ -136,8 +193,9 @@ def encodeX(df):
         for token in sentence:
             sen_tmp.append(one_hot(token, len(unique_words)))
         X_tmp.append(sen_tmp)
-
-    X_tmp = pad_sequences(X_tmp, longest_sentence, padding='post')
+    
+    X_tmp = pad_sequences(X_tmp, longest_sentence, padding='post') 
+    # makes all sentences the same length by padding with preset value at the end
 
     return X_tmp
 
@@ -153,20 +211,60 @@ class TorchDataset(Dataset):
 
     def get_y(self):
         return self.y
-
+            
     def __getitem__(self, idx):
         x = self.x[idx]
         y = self.y[idx]
-        tensorx = torch.tensor(x).float()
-        tensory = torch.tensor(y).long()
-        return (tensorx, tensory)
-
+        return (torch.tensor(x).float(), torch.tensor(y).long())
+    
     def __len__(self):
         return len(self.x)
 
     def get_dataloader(self, batch_size=128, num_workers=0, shuffle=False):
-        return DataLoader(self, batch_size=batch_size, drop_last=True, pin_memory=True, num_workers=num_workers,
-                          shuffle=shuffle)
+        return DataLoader(self, batch_size=batch_size, drop_last=True, pin_memory=True, num_workers=num_workers, shuffle=shuffle)
+
+
+
+class TorchTrainer():
+    def __init__(self, model, name, dirpath, dataloaders, max_epochs=50) -> None:
+        self.model = model
+        self.name = name
+        self.dirpath = dirpath
+        self.max_epochs = max_epochs
+        self.dataloaders = dataloaders
+
+    def run(self):
+        logger = TensorBoardLogger(f"{self.dirpath}/tensorboard", name=self.name)
+        callbacks = [
+            ModelCheckpoint(dirpath=Path(self.dirpath, self.name), monitor="val_loss"),
+            EarlyStopping(monitor='loss')
+            ]
+        trainer = Trainer(deterministic=True, logger=logger, callbacks=callbacks, max_epochs=self.max_epochs)
+        trainer.fit(self.model, self.dataloaders['train'], self.dataloaders['val'])
+        return trainer
+
+
+
+
+
+
+# class TorchTrainer():
+#     def __init__(self, model, name, dirpath, dataloaders, max_epochs=50) -> None:
+#         self.model = model
+#         self.name = name
+#         self.dirpath = dirpath
+#         self.max_epochs = max_epochs
+#         self.dataloaders = dataloaders
+
+#     def train(self):
+#         logger = TensorBoardLogger(f"{self.dirpath}/tensorboard", name=self.name)
+#         callbacks = [
+#             ModelCheckpoint(dirpath=Path(self.dirpath, self.name), monitor="val_loss"),
+#             EarlyStopping(monitor='loss')
+#             ]
+#         trainer = Trainer(deterministic=True, logger=logger,
+#                           callbacks=callbacks, max_epochs=self.max_epochs)
+#         trainer.fit(self.model, self.dataloaders['train'])
 
 
 
@@ -303,21 +401,3 @@ class IMDBDataset:
         )
 
         return train_iterator, valid_iterator, test_iterator
-
-class TorchTrainer():
-    def __init__(self, model, name, dirpath, dataloaders, max_epochs=50) -> None:
-        self.model = model
-        self.name = name
-        self.dirpath = dirpath
-        self.max_epochs = max_epochs
-        self.dataloaders = dataloaders
-
-    def train(self):
-        logger = TensorBoardLogger(f"{self.dirpath}/tensorboard", name=self.name)
-        callbacks = [
-            ModelCheckpoint(dirpath=Path(self.dirpath, self.name), monitor="val_loss"),
-            EarlyStopping(monitor='loss')
-            ]
-        trainer = Trainer(deterministic=True, logger=logger,
-                          callbacks=callbacks, max_epochs=self.max_epochs)
-        trainer.fit(self.model, self.dataloaders['train'], self.dataloaders['val'])
