@@ -50,10 +50,7 @@ class LemmaTokenizer(object):
     def __call__(self, articles):
         return [self.wnl.lemmatize(t) for t in word_tokenize(articles)]
 
-def shortest_dep_path(sentence):
-    import spacy
-    import networkx as nx
-    nlp = spacy.load("en_core_web_sm")
+def shortest_dep_path(nlp, sentence):
     doc = nlp(sentence)
     edges = []
     for token in doc:
@@ -62,8 +59,8 @@ def shortest_dep_path(sentence):
                 '{0}'.format(token.lemma_),
                 '{0}'.format(child.lemma_)))
     graph = nx.Graph(edges)
-    entity1 = 'food_entity'
-    entity2 = 'disease_entity'
+    entity1 = 'TERMONE'
+    entity2 = 'TERMTWO'
     try:
         return nx.shortest_path(graph, source=entity1, target=entity2)
     except:
@@ -71,6 +68,7 @@ def shortest_dep_path(sentence):
 
 def remove_stop_words(tokens):
     return [x for x in tokens if x not in nltk.corpus.stopwords.words('english') and len(x) > 1]
+
 
 def read_and_prepare_data(path, shall_sdp=False):
 
@@ -83,6 +81,7 @@ def read_and_prepare_data(path, shall_sdp=False):
         on_bad_lines='skip',
         usecols=usedcols)
 
+    print("\tData read in - preprocessing started")
     # Make case insensitive (no loss because emphasis on words does not play a role)
     df['sentence'] = df['sentence'].map(lambda x: x.lower())
     # Replace entities in sentence with placeholder tokens (may be useful for generalization when using n-grams)
@@ -108,60 +107,12 @@ def read_and_prepare_data(path, shall_sdp=False):
     lemmatizer = nltk.stem.WordNetLemmatizer()
     df['tokens_lemma'] = df['tokens_stem'].apply(lambda x: [lemmatizer.lemmatize(token) for token in x])
 
-    
     nlp = spacy.load("en_core_web_sm")
-    doc = nlp(df['sentence'][0])
-    def shortest_dep_path(sentence):
-        doc = nlp(sentence)
-        edges = []
-        for token in doc:
-            for child in token.children:
-                edges.append((
-                    '{0}'.format(token.lemma_),
-                    '{0}'.format(child.lemma_)))
-        graph = nx.Graph(edges)
-        entity1 = 'TERMONE'
-        entity2 = 'TERMTWO'
-        try:
-            return nx.shortest_path(graph, source=entity1, target=entity2)
-        except:
-            return []
 
-    def remove_stop_words(tokens):
-        return [x for x in tokens if x not in nltk.corpus.stopwords.words('english') and len(x) > 1]
-
-
-    df['sdp_tokens_lemma'] = df['sentence'].apply(lambda x: remove_stop_words(shortest_dep_path(x)))
-
-    
-    # # Make case insensitive (no loss because emphasis on words does not play a role)
-    # df['sentence'] = df['sentence'].map(lambda x: x.lower())
-    # # Replace entities in sentence with placeholder tokens (may be useful for generalization when using n-grams)
-    # df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['term1'].lower(), 'TERMONE'), axis=1)
-    # df['sentence'] = df.apply(lambda x: x['sentence'].replace(x['term2'].lower(), 'TERMTWO'), axis=1)
-    # df = df[df['sentence'].apply(lambda x: 'TERMONE' in x and 'TERMTWO' in x)]
-
-    # # Convert labels to right dtype
-    # df['is_cause'] = df['is_cause'].astype(float).astype(int)
-    # df['is_treat'] = df['is_treat'].astype(float).astype(int)
-
-    # # Tokenize the sentences
-    # tokenizer = nltk.RegexpTokenizer(r'\w+')
-    # df['tokens'] = df['sentence'].apply(lambda x: tokenizer.tokenize(x))
-    # # Remove stop words and tokens with length smaller than 2 (i.e. punctuations)
-    # df['tokens'] = df['tokens'].apply(lambda x: [token for token in x if token not in nltk.corpus.stopwords.words('english') and len(token) > 1])
-    # # Perform stemming
-    # porter = nltk.PorterStemmer()
-    # df['tokens_stem'] = df['tokens'].apply(lambda x: [porter.stem(token) for token in x])
-
-    # # Perform lemmatization
-    # lemmatizer = nltk.stem.WordNetLemmatizer()
-    # df['tokens_lemma'] = df['tokens_stem'].apply(lambda x: [lemmatizer.lemmatize(token) for token in x])
-    
-    # if shall_sdp:
-    #     df['sdp_tokens_lemma'] = df['sentence'].apply(lambda x: remove_stop_words(shortest_dep_path(x)))
-    # print(df.columns.values)
-    print("## Finished reading and preparing data ##")
+    if shall_sdp:
+        print("\tstarting shortest path search and stopword removal")
+        df['sdp_tokens_lemma'] = df['sentence'].apply(lambda x: remove_stop_words(shortest_dep_path(nlp, x)))
+    print("## Finished reading and preparing the data ##")
     return df
 
 
