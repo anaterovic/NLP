@@ -50,10 +50,12 @@ def train_milestone2(train_data, use_sdp=True, save=False, save_path=None):
     print(data_frame.columns.values)
     X = data_frame[['tokens_lemma', 'tokens']]
     y = data_frame[['is_cause', 'is_treat']]
-    print(X.iloc[0])
-    print("## Encoding ##")
+
     X = encodeX(X)
     y = y.to_numpy()
+
+    print(X[4])
+    return
 
     # X = X['tokens_lemma'] # overcome with encode
 
