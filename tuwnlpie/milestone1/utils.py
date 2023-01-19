@@ -21,9 +21,9 @@ def read_food_disease_csv(path=Path('..', 'data', 'food_disease.csv')):
     return df
 
 
-def split_data(docs):
-    train, test = train_test_split(docs, test_size=0.20)
-    return train, test
+def split_data(X, y, test_size=0.8, random_state=412):
+    s1, s2, s3, s4 = train_test_split(X, y, test_size=test_size, random_state=random_state)
+    return s1, s2, s3, s4
 
 
 def calculate_tp_fp_fn(y_true, y_pred):

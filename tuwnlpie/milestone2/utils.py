@@ -116,8 +116,8 @@ def read_and_prepare_data(path, shall_sdp=False):
     return df
 
 
-def split_data_set(X, y, size=0.8, random_state=412):
-    s1, s2, s3, s4 = split(X, y, test_size=size, random_state=random_state)
+def split_data_set(X, y, test_size=0.8, random_state=412):
+    s1, s2, s3, s4 = split(X, y, test_size=test_size, random_state=random_state)
     return s1, s2, s3, s4
 
 def length_longest_sentence(df):

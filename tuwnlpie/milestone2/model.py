@@ -86,6 +86,12 @@ class TorchModel(LightningModule):
         return torch.optim.Adagrad(
             self.parameters(), lr=self.hparams.learning_rate)
         
+    def predict(self, batch):
+        x, y = batch
+        out = self(x)
+        return out
+
+        
 
 
 # class TorchModel(LightningModule):
