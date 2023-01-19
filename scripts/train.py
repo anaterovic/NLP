@@ -14,12 +14,24 @@ from tuwnlpie.milestone2.utils import TorchTrainer, read_and_prepare_data, Torch
 
 
 def train_milestone1(train_data=Path('..', 'data', 'food_disease.csv'), use_sdp=False, save=False, save_path=None):
-    model = NBClassifier(use_sdp=use_sdp)
+    print("## Reading in Data ##")
     docs = read_food_disease_csv(train_data)
-    train_docs, test_docs = split_data(docs)
 
-    model.train(train_docs['sentence'], train_docs[['is_cause', 'is_treat']])
+    print("## Split ##")
+    X = docs[['food_entity', 'disease_entity', 'sentence']]
+    X = X['sentence']
+    y = docs[['is_cause', 'is_treat']]
+    X_train, X_test, y_train, y_test = split_data(X, y,  test_size=0.8, random_state=1)
+
+    print("## Create the model ##")
+    model = NBClassifier(use_sdp=use_sdp)
+
+    print("## Starting Training ##")
+    model.train(X_train, y_train)
+    print("## model trained sucessfully ##")
+    
     if save:
+        print(f"## saving model to {save_path} ##")
         model.save_model(save_path)
         logger.info(f"Saved model to {save_path}")
     return
@@ -46,7 +58,6 @@ def train_milestone2(train_data, use_sdp=True, save=False, save_path=None):
     # X = X['tokens_lemma'] # overcome with encode
 
     print("## Split ##")
-    # split
     X_train, X_test, y_train, y_test = split_data_set(X, y,  test_size=0.8, random_state=1)
     X_test, X_val, y_test, y_val= split_data_set(X_test, y_test, test_size=0.5, random_state=1) 
 
@@ -79,8 +90,8 @@ def train_milestone2(train_data, use_sdp=True, save=False, save_path=None):
     the_trainer = trainer.run()
 
     if save:
-        model.save_model(save_path)
-
+        print(f"## Saving Model to {save_path} ##")
+        torch.save(model, save_path)
     return
 
 
