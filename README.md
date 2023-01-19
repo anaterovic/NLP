@@ -153,7 +153,7 @@ __Training__:
 To train a model on the FoodDisease dataset and then save object to a file, you can run a command:
 
 ```bash
-python scripts/train.py -t data/food_disease.csv -sdp -s -sp data/bayes_model.pkl -m 1
+python ./scripts/train.py -t ./data/food_disease.csv -s -sp ./models/model_milestone1.pkl -m1
 ```
 
 __Evaluation__:
@@ -171,7 +171,7 @@ __Training__:
 To train the neural network on the IMDB dataset and then save the weights to a file, you can run a command:
 
 ```bash
- python scripts/train.py -t data/imdb_dataset_sample.csv -s -sp data/bow_model.pt -m 2
+python ./scripts/train.py -t ./data/crowd_truth_combined.csv -sdp -s -sp ./models/model_milestone2.pt -m2
 ```
 
 __Evaluation__:
@@ -179,7 +179,7 @@ __Evaluation__:
 To evaluate the model on the dataset with the trained weights, you can run a command (you can also provide a pretrained model, so if someone wants to evaluate your model, they can do it without training it):
 
 ```bash
-python scripts/evaluate.py -t data/imdb_dataset_sample.csv -sm data/bow_model.pt -sp -m 2
+# python scripts/evaluate.py -t data/imdb_dataset_sample.csv -sm data/bow_model.pt -sp -m 2
 ```
 
 # Running the tests
