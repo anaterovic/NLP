@@ -51,12 +51,15 @@ def train_milestone2(train_data, use_sdp=True, save=False, save_path=None):
     X = data_frame[['tokens_lemma', 'tokens']]
     y = data_frame[['is_cause', 'is_treat']]
 
-    print("## Encoding ##")
     X = encodeX(X)
     y = y.to_numpy()
 
+    print(X[4])
+    return
+
     # X = X['tokens_lemma'] # overcome with encode
 
+    return
     print("## Split ##")
     X_train, X_test, y_train, y_test = split_data_set(X, y,  test_size=0.8, random_state=1)
     X_test, X_val, y_test, y_val= split_data_set(X_test, y_test, test_size=0.5, random_state=1) 
